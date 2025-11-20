@@ -11,10 +11,10 @@ Resources:
   B2:
     Type: AWS::S3::Bucket
     #B2Permission needs to be created first so that B2 has correct permissions for
-    #lambda coonfigurations.
+    #lambda configurations.
     DependsOn: B2Permission
     Properties:
-      BucketName: photosBucket
+      BucketName: !Sub "photosbucket-${AWS::AccountId}-${AWS::Region}"
       NotificationConfiguration:
         #Allows S3 to use put method on LF1
         LambdaConfigurations:
@@ -33,7 +33,7 @@ Resources:
       Action: lambda:InvokeFunction
       FunctionName: !Ref LF1
       Principal: s3.amazonaws.com
-      SourceArn: arn:aws:s3:::photosBucket
+      SourceArn: !Sub "arn:aws:s3:::photosbucket-${AWS::AccountId}-${AWS::Region}"
 
   LF1:
     Type: AWS::Lambda::Function
@@ -47,7 +47,7 @@ Resources:
       Code:
         ZipFile: |
           def main(event, context):
-            Return "Hello World!"
+            return "Hello World!"
       Handler: index.main
 
   LF1IAMRole:
