@@ -92,3 +92,234 @@ Resources:
 #                  - "arn:aws:es:${AWS::Region}:${AWS::AccountId}:domain/${DomainName}/photos/*"
 #                  #Pulls physical domain name assigned when open search instance is created
 #                  - DomainName: !GetAtt PhotosDomain.DomainName
+
+    BotRuntimeRole:
+        Type: AWS::IAM::Role
+        Properties:
+          AssumeRolePolicyDocument:
+            Version: "v1"
+            Statement:
+              - Effect: Allow
+                Principal:
+                  Service:
+                    - lexv2.amazonaws.com
+                Action:
+                  - "sts:AssumeRole"
+          Path: "/"
+          Policies:
+            - PolicyName: LexRuntimeRolePolicy
+              PolicyDocument:
+                Version: v1
+                Statement:
+                  - Effect: Allow
+                    Action:
+                      - "polly:SynthesizeSpeech"
+                      - "comprehend:DetectSentiment"
+                    Resource: "*"
+     
+    # 2. Inline bot definition which depends on the IAM role
+    # The bot definition consists of combining all the child resources into one CFN resource.
+    # This includes Locales, Intents, Slots, and SlotTypes.
+    PhotoSearchBot:
+        DependsOn: BotRuntimeRole
+        Type: AWS::Lex::Bot
+        Properties:
+          Name: "PhotoSearcher"
+          RoleArn: !GetAtt BotRuntimeRole.Arn
+          DataPrivacy:
+            ChildDirected: false
+          IdleSessionTTLInSeconds: 300
+          Description: "Takes user input to get keywords to search with"
+          # Provide a setting that allows you to either auto build the locales provided.
+          # Locale builds are also kicked off if you attempt to create a bot version 
+          # that depends on an unbuilt locale.
+          AutoBuildBotLocales: false
+          BotLocales:
+            - LocaleId: "en_US"
+              Description: "Find a photo based on description"
+              NluConfidenceThreshold: 0.40
+              VoiceSettings:
+                VoiceId: "Ivy"
+              SlotTypes:
+                - Name: "PhotoTypeValues"
+                  Description: "Slot Type description"
+                  SlotTypeValues:
+                    - SampleValue:
+                        Value: person
+                    - SampleValue:
+                        Value: dog
+                    - SampleValue:
+                        Value: park
+                    - SampleValue:
+                        Value: bird
+                    - SampleValue:
+                        Value: tree
+                  ValueSelectionSetting:
+                    ResolutionStrategy: ORIGINAL_VALUE
+              Intents:
+                - Name: "SearchIntent"
+                  Description: "Intent to search for a photo"
+                  SampleUtterances:
+                    - Utterance: "Show me photos"
+                    - Utterance: "Give me the photos"
+                    - Utterance: "I want to search my photos"
+                  SlotPriorities:
+                    - Priority: 1
+                      SlotName: PhotoType
+                  IntentConfirmationSetting:
+                    PromptSpecification:
+                      MessageGroupsList:
+                        - Message:
+                            PlainTextMessage:
+                              Value: "Okay, I am going to search for {PhotoType}, can you confirm?"
+                      MaxRetries: 3
+                      AllowInterrupt: false
+                    DeclinationResponse:
+                      MessageGroupsList:
+                        - Message:
+                            PlainTextMessage:
+                              Value: "Okay, I have cancelled your search request."
+                      AllowInterrupt: false
+                  Slots:
+                    - Name: "PhotoType"
+                      Description: "something"
+                      SlotTypeName: "String"
+                      ValueElicitationSetting:
+                        SlotConstraint: "Required"
+                        PromptSpecification:
+                          MessageGroupsList:
+                            - Message:
+                                PlainTextMessage:
+                                  Value: "What do you want to look for?"
+                          MaxRetries: 3
+                          AllowInterrupt: false
+                # We expect developers to provide the FallbackIntent when generating their bot.
+                # The service will throw an exception if it isn't provided.
+                - Name: "FallbackIntent"
+                  Description: "Default intent when no other intent matches"
+                  ParentIntentSignature: "AMAZON.FallbackIntent"
+     
+    # 3. Define a bot version which depends on the DRAFT version of the Lex Bot
+    PhotoSearchBotVersionWithCFN:
+        DependsOn: PhotoSearchBot
+        Type: AWS::Lex::BotVersion
+        Properties:
+          BotId: !Ref PhotoSearchBot
+          BotVersionLocaleSpecification:
+            - LocaleId: en_US
+              BotVersionLocaleDetails:
+                SourceBotVersion: DRAFT
+          Description: BookTrip Version
+
+    # 4. We define the alias by providing the bot version created by the AWS::Lex::BotVersion resource above
+    FirstBotAliasWithCFN:
+        DependsOn: PhotoSearchBotVersionWithCFN
+        Type: AWS::Lex::BotAlias
+        Properties:
+          BotId: !Ref PhotoSearchBot
+          BotAliasName: "PhotoSearchBotVersion1"
+          # Remove BotAliasLocaleSettings if you aren't concerned with Lambda setup.
+          # If you are you can modify the LambdaArn below to get started.
+          # BotAliasLocaleSettings:
+          #   - LocaleId: en_US
+          #     BotAliasLocaleSetting:
+          #       Enabled: false
+          #       CodeHookSpecification: 
+          #         LambdaCodeHook:
+          #           CodeHookInterfaceVersion: "1.0"
+          #           LambdaArn: "arn:aws:lambda:us-east-1:111111111111:function:ReplaceWithYourOwnLambda"
+          BotVersion: !GetAtt PhotoSearchBotWithCFN.BotVersion
+          SentimentAnalysisSettings:
+            DetectSentiment: true
+    LF2:
+        DependsOn: PhotoSearchBot
+        Type: AWS:Lambda::Function
+        Properties:
+            Role: !GetAtt LF1AMRole.Arn
+            Runtime: python3.14
+            FunctionName: search-photos
+          #Source code for lambda function
+          Code:
+            S3Bucket: !Ref P1ArtifactBucket
+            S3Key: SourceArtifact/lf2.zip
+          Handler: index.main
+          Timeout: 15
+          APIGateway:
+            Type: AWS::ApiGateway::Method
+            Properties:
+          ApiKeyRequired: Boolean
+          AuthorizationScopes: 
+            - String
+          AuthorizationType: String
+          AuthorizerId: String
+          HttpMethod: String
+          Integration: 
+            Integration
+          MethodResponses: 
+            - MethodResponse
+          OperationName: String
+          RequestModels: 
+            Key: Value
+          RequestParameters: 
+            Key: Value
+          RequestValidatorId: String
+          ResourceId: String
+          RestApiId: String
+
+    PhotoGateway:
+        Type: AWS::ApiGateway::RestApi
+        Properties:
+          Name: A3APIGateway
+    #/photos resource
+    PhotoResource:
+        Type: AWS:ApiGateway::Resource
+        Properties:
+            ParentId: !GetAtt PhotoGateway.RootResourceId
+            PathPart: photos
+            RestApiId: !Ref PhotoGateway
+    # /search resource
+    SearchResource:
+        Type: AWS:ApiGateway::Resource
+        Properties:
+            ParentId: !GetAtt PhotoGateway.RootResourceId
+            PathPart: search
+            RestApiId: !Ref PhotoGateway
+    #methods
+
+    PutPhotosMethod:
+        Type: AWS::ApiGateway::Method
+        Properties:
+            RestApiId: !Ref PhotoGateway
+            ResourceId: !Ref PhotoResource
+            HttpMethod: PUT
+            AuthorizationType: NONE
+            Integration:
+                Type: AWS_PROXY
+                IntegrationHttpMethod: POST
+                #need path to S3 bucket containing photos here
+                
+    GetSearchMethod:
+        Type: AWS::ApiGateway::Method
+        Properties:
+            RestApiId: !Ref PhotoGateway
+            ResourceId: !Ref SearchResource
+            HttpMethod: GET
+            AuthorizationType: NONE
+            RequestParameters:
+                method.request.querystring.q: false
+            Integration:
+                Type: AWS_PROXY
+                IntegrationHttpMethod: POST
+                Uri: !Sub > 
+                arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${PhotoSearchFunction.Arn}/invocations
+              MethodResponses:
+                - StatusCode: 200
+                
+    ApiDeployment:
+        Type: AWS::ApiGateway::Deployment
+        DependsOn:
+            - PutPhotosMethod
+            - GetSearchMethod
+        Properties:
+        RestApiId: !Ref PhotoApi
+        StageName: !Ref StageName
