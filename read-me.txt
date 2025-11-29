@@ -1,0 +1,5 @@
+Startup tasks:
+    1: Create stack in cloud formation using assignment3.yaml
+    2: Create photo index within OpenSearch domain photos
+    3: Add OpenSearch layer to lf1 and lf2 if needed.
+    4: Update lf1 and lf2 with OpenSearch domain photos url if needed.
