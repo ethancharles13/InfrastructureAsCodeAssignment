@@ -112,7 +112,7 @@ def search_opensearch(keywords: list[str]) -> list[dict]:
 
 # --- Lambda entrypoint ---
 
-def lambda_handler(event, context):
+def main(event, context):
     """
     LF2:
     - Reads query param q from API Gateway
