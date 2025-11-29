@@ -147,6 +147,7 @@ searchForm.addEventListener('submit', function (e) {
     }
 
     const params = {
+        object: file.name,
         'x-amz-meta-customLabels': customLabelsHeader || ''  // required by SDK
     };
 
@@ -155,7 +156,7 @@ searchForm.addEventListener('submit', function (e) {
 
     uploadStatus.textContent = 'Uploading...';
 
-    apigClient.photosPut(params, body, additionalParams)
+    apigClient.photosObjectPut(params, body, additionalParams)
         .then(function (resp) {
         uploadStatus.textContent = 'Upload successful!';
         fileInput.value = '';
