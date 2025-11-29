@@ -27,6 +27,8 @@ Resources:
 
   B2:
     Type: AWS::S3::Bucket
+    #Prevents failure in stack shutdown due to bucket that contains user data
+    DeletionPolicy: Retain
     #B2Permission needs to be created first so that B2 has correct permissions for
     #lambda configurations.
     DependsOn: B2Permission
