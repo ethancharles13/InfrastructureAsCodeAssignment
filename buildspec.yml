@@ -3,13 +3,18 @@ version: 0.2
 phases:
   build:
     commands:
-      - echo "Zipping lf1.py"
       - zip lf1.zip lf1.py
-
-      - echo "Zipping lf2.py"
       - zip lf2.zip lf2.py
 
 artifacts:
+  #dummy to act as primary artifact
   files:
-    - lf1.zip
-    - lf2.zip
+    - '**/*'
+  #artifacts for lambda functions
+  secondary-artifacts:
+    lf1Artifact:
+      files:
+        - lf1.zip
+    lf2Artifact:
+      files:
+      - lf2.zip
