@@ -66,8 +66,8 @@ Resources:
         ZipFile: |
           def main(event, context):
             return "Hello World!"
-      Handler: index.main
-      Timeout: 15
+      Handler: lf1.main
+      Timeout: 30
 
   LF1IAMRole:
     Type: AWS::IAM::Role
@@ -313,8 +313,8 @@ Resources:
         ZipFile: |
           def main(event, context):
             return "Hello World!"
-      Handler: index.main
-      Timeout: 15
+      Handler: lf2.main
+      Timeout: 30
 
   PhotoGateway:
     Type: AWS::ApiGateway::RestApi
