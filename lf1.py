@@ -112,4 +112,3 @@ def main(event, context):
             "statusCode": 500,
             "body": "Failed to index photo."
         }
-#test
