@@ -329,6 +329,13 @@ Resources:
       ParentId: !GetAtt PhotoGateway.RootResourceId
       PathPart: photos
 
+  PhotosObjectResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref PhotoGateway
+      ParentId: !Ref PhotosResource
+      PathPart: "{object}"
+
   # /search resource
   SearchResource:
     Type: AWS::ApiGateway::Resource
@@ -344,11 +351,12 @@ Resources:
       - B2
     Properties:
       RestApiId: !Ref PhotoGateway
-      ResourceId: !Ref PhotosResource
+      ResourceId: !Ref PhotosObjectResource
       HttpMethod: PUT
       AuthorizationType: NONE
       ApiKeyRequired: true
       RequestParameters:
+        method.request.path.object: true
         method.request.header.x-amz-meta-customLabels: false
       Integration:
         Type: AWS
