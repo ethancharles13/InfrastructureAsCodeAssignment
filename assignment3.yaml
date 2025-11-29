@@ -275,6 +275,12 @@ Resources:
       BotVersion: !GetAtt PhotoSearchBotVersionWithCFN.BotVersion
       SentimentAnalysisSettings:
         DetectSentiment: true
+  Outputs:
+    LexBotId:
+      Value: !Ref PhotoSearchBot
+    
+    LexBotAliasId:
+      Value: !Ref FirstBotAliasWithCFN
 
   LF2:
     DependsOn: PhotoSearchBot
@@ -284,6 +290,11 @@ Resources:
       Runtime: python3.12
       FunctionName: search-photos
       # Source code for lambda function
+      Environment:
+        Variables:
+          LEX_BOT_ID: !Ref PhotoSearchBot
+          LEX_ALIAS_ID: !Ref FirstBotAliasWithCFN
+          LEX_LOCALE_ID: "en_US"
       Code:
         ZipFile: |
           def main(event, context):
