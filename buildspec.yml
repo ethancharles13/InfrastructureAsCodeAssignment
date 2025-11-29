@@ -7,14 +7,13 @@ phases:
       - zip lf2.zip lf2.py
 
 artifacts:
-  #dummy to act as primary artifact
+  #Dummy for primary artifact
   files:
-    - '**/*'
-  #artifacts for lambda functions
+    -  dummy.txt
   secondary-artifacts:
-    lf1Artifact:
+    BuildArtifactLF1:
       files:
         - lf1.zip
-    lf2Artifact:
+    BuildArtifactLF2:
       files:
-      - lf2.zip
+        - lf2.zip
