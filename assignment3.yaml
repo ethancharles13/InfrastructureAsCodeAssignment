@@ -309,6 +309,8 @@ Resources:
           LEX_BOT_ID: !Ref PhotoSearchBot
           LEX_ALIAS_ID: !Ref FirstBotAliasWithCFN
           LEX_LOCALE_ID: "en_US"
+          OS_ENDPOINT: !GetAtt PhotosDomain.DomainEndpoint
+          OS_INDEX: "photos"
       Code:
         ZipFile: |
           def main(event, context):
