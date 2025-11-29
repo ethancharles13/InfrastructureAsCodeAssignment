@@ -27,6 +27,7 @@ Resources:
 
   B2:
     Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
     # B2Permission needs to be created first so that B2 has correct permissions for
     # lambda configurations.
     DependsOn: B2Permission
@@ -221,6 +222,35 @@ Resources:
                     Value: bird
                 - SampleValue:
                     Value: tree
+                - SampleValue:
+                    Value: face
+                - SampleValue:
+                    Value: head
+                - SampleValue:
+                    Value: photography
+                - SampleValue:
+                    Value: portrait
+                - SampleValue:
+                    Value: coat
+                - SampleValue:
+                    Value: jacket
+                - SampleValue:
+                    Value: mouth
+                - SampleValue:
+                    Value: earring
+                - SampleValue:
+                    Value: food
+                - SampleValue:
+                    Value: dessert
+                - SampleValue:
+                    Value: cream
+                - SampleValue:
+                    Value: blazer
+                - SampleValue:
+                    Value: baby
+                - SampleValue:
+                    Value: adult
+                    
               ValueSelectionSetting:
                 ResolutionStrategy: ORIGINAL_VALUE
           Intents:
@@ -297,12 +327,6 @@ Resources:
       BotVersion: !GetAtt PhotoSearchBotVersionWithCFN.BotVersion
       SentimentAnalysisSettings:
         DetectSentiment: true
-  Outputs:
-    LexBotId:
-      Value: !Ref PhotoSearchBot
-    
-    LexBotAliasId:
-      Value: !Ref FirstBotAliasWithCFN
 
   LF2:
     DependsOn: PhotoSearchBot
@@ -316,6 +340,8 @@ Resources:
         Variables:
           LEX_BOT_ID: !Ref PhotoSearchBot
           LEX_ALIAS_ID: !Ref FirstBotAliasWithCFN
+          OS_ENDPOINT: !GetAtt PhotosDomain.DomainEndpoint
+          OS_INDEX: "photos"
           LEX_LOCALE_ID: "en_US"
       Code:
         ZipFile: |
