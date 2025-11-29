@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Photo Search</title>
+  <style>
+    body { font-family: sans-serif; max-width: 800px; margin: 0 auto; padding: 1rem; }
+    h1 { margin-bottom: 0.5rem; }
+    form { margin-bottom: 1.5rem; border: 1px solid #ddd; padding: 1rem; border-radius: 4px; }
+    label { display: block; margin-bottom: 0.25rem; }
+    input[type="text"], input[type="file"] { width: 100%; margin-bottom: 0.5rem; }
+    button { padding: 0.5rem 1rem; cursor: pointer; }
+    #results { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 0.75rem; }
+    .photo-card { border: 1px solid #eee; padding: 0.5rem; border-radius: 4px; text-align: center; }
+    .photo-card img { max-width: 100%; max-height: 150px; object-fit: cover; }
+    .small { font-size: 0.8rem; color: #555; }
+  </style>
+</head>
+<body>
+  <h1>Photo Search</h1>
+
+  <!-- Search form -->
+  <form id="search-form">
+    <h2>Search Photos</h2>
+    <label for="search-query">Search query:</label>
+    <input id="search-query" type="text" placeholder="e.g. beach, dog, park" />
+    <button type="submit">Search</button>
+  </form>
+
+  <div id="results"></div>
+
+  <!-- Upload form -->
+  <form id="upload-form">
+    <h2>Upload Photo</h2>
+    <label for="photo-file">Photo file:</label>
+    <input id="photo-file" type="file" accept="image/*" required />
+
+    <label for="custom-labels">
+      Custom labels (comma-separated):
+    </label>
+    <input
+      id="custom-labels"
+      type="text"
+      placeholder="Sam, Sally"
+    />
+
+    <button type="submit">Upload</button>
+    <div id="upload-status" class="small"></div>
+  </form>
+<script src="sdk/apiGateway-js-sdk/lib/axios/dist/axios.standalone.js"></script>
+<script src="sdk/apiGateway-js-sdk/lib/CryptoJS/crypto-js.js"></script>
+<script src="sdk/apiGateway-js-sdk/lib/url-template/url-template.js"></script>
+<script src="sdk/apiGateway-js-sdk/lib/apiGatewayCore/sigV4Client.js"></script>
+<script src="sdk/apiGateway-js-sdk/lib/apiGatewayCore/apiGatewayClient.js"></script>
+<script src="sdk/apiGateway-js-sdk/lib/apiGatewayCore/simpleHttpClient.js"></script>
+<script src="sdk/apiGateway-js-sdk/lib/apiGatewayCore/utils.js"></script>
+<script src="sdk/apiGateway-js-sdk/apigClient.js"></script>
+
+<script>
+    // == CONFIG ==
+    const apigClient = apigClientFactory.newClient({
+        apiKey: 'ZVAEovpXhKbgt5GyXsid3ksNqKDoUf24EvG0BV27', // from API Gateway usage plan
+        region: 'us-east-1'          // matches your API region
+        });
+    const PHOTO_BUCKET = 'photosbucket-346225466066-us-east-1'; // e.g. 'photosbucket-123456789012-us-east-1'
+
+    // Build public URL for an object in B2
+    function buildPhotoUrl(objectKey) {
+      // If using S3 website hosting instead of the REST endpoint, adjust this accordingly.
+      return `https://${PHOTO_BUCKET}.s3.amazonaws.com/${encodeURIComponent(objectKey)}`;
+    }
+
+    // === SEARCH ===
+    const searchForm = document.getElementById('search-form');
+    const searchInput = document.getElementById('search-query');
+    const resultsDiv = document.getElementById('results');
+
+searchForm.addEventListener('submit', function (e) {
+  e.preventDefault();
+  const q = searchInput.value.trim();
+  if (!q) return;
+
+  resultsDiv.textContent = 'Searching...';
+
+  const params = { q };       // this becomes ?q=...
+  const body = {};            // GET has no body
+  const additionalParams = {}; // headers, etc., if needed
+
+  apigClient.searchGet(params, body, additionalParams)
+    .then(function (resp) {
+      // resp.data is the JSON response from LF2
+      const data = resp.data;
+      const results = data.results || data; // depending on how LF2 responds
+
+      if (!results.length) {
+        resultsDiv.textContent = 'No photos found.';
+        return;
+      }
+
+      resultsDiv.innerHTML = '';
+      results.forEach(photo => {
+        const card = document.createElement('div');
+        card.className = 'photo-card';
+
+        const img = document.createElement('img');
+        img.src = buildPhotoUrl(photo.objectKey); // write this helper using your photo bucket
+
+        const info = document.createElement('div');
+        info.className = 'small';
+        info.textContent = `${photo.objectKey} (${(photo.labels || []).join(', ')})`;
+
+        card.appendChild(img);
+        card.appendChild(info);
+        resultsDiv.appendChild(card);
+      });
+    })
+    .catch(function (err) {
+      console.error(err);
+      resultsDiv.textContent = 'Error performing search. Check console.';
+    });
+});
+
+    // === UPLOAD ===
+    const uploadForm = document.getElementById('upload-form');
+    const fileInput = document.getElementById('photo-file');
+    const customLabelsInput = document.getElementById('custom-labels');
+    const uploadStatus = document.getElementById('upload-status');
+
+    uploadForm.addEventListener('submit', function (e) {
+    e.preventDefault();
+    uploadStatus.textContent = '';
+
+    const file = fileInput.files[0];
+    if (!file) {
+        uploadStatus.textContent = 'Please choose a file.';
+        return;
+    }
+
+    const raw = customLabelsInput.value.trim();
+    let customLabelsHeader = '';
+    if (raw) {
+        const labels = raw
+        .split(',')
+        .map(l => l.trim())
+        .filter(l => l.length > 0);
+        customLabelsHeader = labels.join(', ');
+    }
+
+    const params = {
+        'x-amz-meta-customLabels': customLabelsHeader || ''  // required by SDK
+    };
+
+    const body = file; // Blob
+    const additionalParams = {}; // extra headers if needed
+
+    uploadStatus.textContent = 'Uploading...';
+
+    apigClient.photosPut(params, body, additionalParams)
+        .then(function (resp) {
+        uploadStatus.textContent = 'Upload successful!';
+        fileInput.value = '';
+        customLabelsInput.value = '';
+        })
+        .catch(function (err) {
+        console.error(err);
+        uploadStatus.textContent = 'Error uploading photo. Check console.';
+        });
+    });
+  </script>
+</body>
+</html>
