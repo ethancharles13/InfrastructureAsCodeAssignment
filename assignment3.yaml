@@ -2,21 +2,39 @@ AWSTemplateFormatVersion: 2010-09-09
 Description: Template for our assignment 3 implementation
 Resources:
 
-  # Comment out OpenSearch resources until we are ready to use them
-  # PhotosDomain:
-  #   Type: AWS::OpenSearchService::Domain
-  #   Properties:
-  #     DomainName: photos
+#Comment out OpenSearch resources until we are ready to use them
+  PhotosDomain:
+    Type: AWS::OpenSearchService::Domain
+    Properties:
+      DomainName: photos
+      EBSOptions:
+        EBSEnabled: true
+        VolumeSize: 10
+        VolumeType: gp2
+      ClusterConfig:
+        InstanceCount: 1
+      AccessPolicies:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              AWS: !GetAtt LF1IAMRole.Arn
+            Action:
+              - es:ESHttpPost
+              - es:ESHttpPut
+              - es:ESHttpDelete
+            Resource: !Sub "arn:aws:es:${AWS::Region}:${AWS::AccountId}:domain/photos/*"
 
   B2:
     Type: AWS::S3::Bucket
-    # B2Permission needs to be created first so that B2 has correct permissions for
-    # lambda configurations.
+    DeletionPolicy: Retain
+    #B2Permission needs to be created first so that B2 has correct permissions for
+    #lambda configurations.
     DependsOn: B2Permission
     Properties:
-      BucketName: !Sub photosbucket-${AWS::AccountId}-${AWS::Region}
+      BucketName: !Sub "photosbucket-${AWS::AccountId}-${AWS::Region}"
       NotificationConfiguration:
-        # Allows S3 to use put method on LF1
+        #Allows S3 to use put method on LF1
         LambdaConfigurations:
           - Event: s3:ObjectCreated:Put
             Filter:
@@ -27,71 +45,73 @@ Resources:
             Function: !GetAtt LF1.Arn
 
   B2Permission:
-    # Gives B2 permision to invoke LF1
+    #Gives B2 permision to invoke LF1
     Type: AWS::Lambda::Permission
     Properties:
       Action: lambda:InvokeFunction
       FunctionName: !Ref LF1
       Principal: s3.amazonaws.com
-      SourceArn: !Sub arn:aws:s3:::photosbucket-${AWS::AccountId}-${AWS::Region}
+      SourceArn: !Sub "arn:aws:s3:::photosbucket-${AWS::AccountId}-${AWS::Region}"
 
   LF1:
     Type: AWS::Lambda::Function
     DependsOn: LF1IAMRole
     Properties:
-      # IAM Role that LF1 must assume.
+      #IAM Role that LF1 must assume.
       Role: !GetAtt LF1IAMRole.Arn
-      Runtime: python3.12
+      Runtime: python3.14
       FunctionName: index-photos
-      # Source code for lambda function
+      #Source code for lambda function
       Code:
         ZipFile: |
           def main(event, context):
             return "Hello World!"
       Handler: index.main
+      Timeout: 15
 
   LF1IAMRole:
     Type: AWS::IAM::Role
     Properties:
-      # Allows a lambda instance to assume this role
+      #Allows a lambda instance to assume this role
       AssumeRolePolicyDocument:
-        Version: '2012-10-17'
+        Version: "2012-10-17"
         Statement:
           - Effect: Allow
             Principal:
               Service: lambda.amazonaws.com
             Action: sts:AssumeRole
-      # Allows a lambda to write logs to CloudWatch
+      #Allows a lambda to write logs to cloudwatch
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
-      # Provides the necessary permissions to lambda
+      #Provides the necessary permissions to lambda
       Policies:
         - PolicyName: LF1Permissions
           PolicyDocument:
-            Version: '2012-10-17'
+            Version: "2012-10-17"
             Statement:
               - Effect: Allow
-                Action: s3:GetObject
-                # The /* gives the lambda object level interactions. Without it,
-                # it can only perform bucket level actions like deleting the bucket.
-                # Hardcoding the arn for B2 is considered bad practice. It is done
-                # here to break the dependency loop B2->LF1->LF1IAMRole->B2
-                Resource: !Sub arn:aws:s3:::photosbucket-${AWS::AccountId}-${AWS::Region}/*
+                Action:
+                  - s3:GetObject
+                  - s3:ListBucket
+                #The /* gives the lambda object leve interactions. Without it,
+                #it can only perform bucket level actions like deleting the bucket.
+                #Hardcoding the arn for B2 is considered bad practice. It is done
+                #here to break the dependency loop B2->LF1->LF1IAMRole->B2
+                Resource:
+                  - "arn:aws:s3:::${B2}"
+                  - "arn:aws:s3:::${B2}/*"
               - Effect: Allow
                 Action: rekognition:DetectLabels
-                # Wild card is used instead of ARN, because Rekognition
-                # is an API based service, so there is no specific ARN
-                # that it needs access to.
-                Resource: '*'
-  #            - Effect: Allow
-  #              Action:
-  #                - es:ESHttpPost
-  #                - es:ESHttpPut
-  #                - es:ESHttpDelete
-  #              Resource: !Sub
-  #                - "arn:aws:es:${AWS::Region}:${AWS::AccountId}:domain/${DomainName}/photos/*"
-  #                # Pulls physical domain name assigned when open search instance is created
-  #                - DomainName: !GetAtt PhotosDomain.DomainName
+                #Wild card is used instead of ARN, because Rekognition
+                #is an API based service, so there is no specific ARN
+                #that it needs access to.
+                Resource: "*"
+              - Effect: Allow
+                Action:
+                  - es:ESHttpPost
+                  - es:ESHttpPut
+                  - es:ESHttpDelete
+                Resource: !Sub "arn:aws:es:${AWS::Region}:${AWS::AccountId}:domain/photos/*"
 
   LF2IAMRole:
     Type: AWS::IAM::Role
@@ -284,6 +304,11 @@ Resources:
       Runtime: python3.12
       FunctionName: search-photos
       # Source code for lambda function
+      Environment:
+        Variables:
+          LEX_BOT_ID: !Ref PhotoSearchBot
+          LEX_ALIAS_ID: !Ref FirstBotAliasWithCFN
+          LEX_LOCALE_ID: "en_US"
       Code:
         ZipFile: |
           def main(event, context):
