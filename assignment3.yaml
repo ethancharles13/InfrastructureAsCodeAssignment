@@ -2,21 +2,21 @@ AWSTemplateFormatVersion: 2010-09-09
 Description: Template for our assignment 3 implementation
 Resources:
 
-  #Comment out OpenSearch resources until we are ready to use them
-  #  PhotosDomain:
-  #    Type: AWS::OpenSearchService::Domain
-  #    Properties:
-  #      DomainName: photos
+  # Comment out OpenSearch resources until we are ready to use them
+  # PhotosDomain:
+  #   Type: AWS::OpenSearchService::Domain
+  #   Properties:
+  #     DomainName: photos
 
   B2:
     Type: AWS::S3::Bucket
-    #B2Permission needs to be created first so that B2 has correct permissions for
-    #lambda configurations.
+    # B2Permission needs to be created first so that B2 has correct permissions for
+    # lambda configurations.
     DependsOn: B2Permission
     Properties:
       BucketName: !Sub photosbucket-${AWS::AccountId}-${AWS::Region}
       NotificationConfiguration:
-        #Allows S3 to use put method on LF1
+        # Allows S3 to use put method on LF1
         LambdaConfigurations:
           - Event: s3:ObjectCreated:Put
             Filter:
@@ -27,7 +27,7 @@ Resources:
             Function: !GetAtt LF1.Arn
 
   B2Permission:
-    #Gives B2 permision to invoke LF1
+    # Gives B2 permision to invoke LF1
     Type: AWS::Lambda::Permission
     Properties:
       Action: lambda:InvokeFunction
@@ -39,11 +39,11 @@ Resources:
     Type: AWS::Lambda::Function
     DependsOn: LF1IAMRole
     Properties:
-      #IAM Role that LF1 must assume.
+      # IAM Role that LF1 must assume.
       Role: !GetAtt LF1IAMRole.Arn
       Runtime: python3.12
       FunctionName: index-photos
-      #Source code for lambda function
+      # Source code for lambda function
       Code:
         ZipFile: |
           def main(event, context):
@@ -53,7 +53,7 @@ Resources:
   LF1IAMRole:
     Type: AWS::IAM::Role
     Properties:
-      #Allows a lambda instance to assume this role
+      # Allows a lambda instance to assume this role
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -61,10 +61,10 @@ Resources:
             Principal:
               Service: lambda.amazonaws.com
             Action: sts:AssumeRole
-      #Allows a lambda to write logs to cloudwatch
+      # Allows a lambda to write logs to CloudWatch
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
-      #Provides the necessary permissions to lambda
+      # Provides the necessary permissions to lambda
       Policies:
         - PolicyName: LF1Permissions
           PolicyDocument:
@@ -72,26 +72,27 @@ Resources:
             Statement:
               - Effect: Allow
                 Action: s3:GetObject
-                #The /* gives the lambda object leve interactions. Without it,
-                #it can only perform bucket level actions like deleting the bucket.
-                #Hardcoding the arn for B2 is considered bad practice. It is done
-                #here to break the dependency loop B2->LF1->LF1IAMRole->B2
-                Resource: arn:aws:s3:::photosbucket/*
+                # The /* gives the lambda object level interactions. Without it,
+                # it can only perform bucket level actions like deleting the bucket.
+                # Hardcoding the arn for B2 is considered bad practice. It is done
+                # here to break the dependency loop B2->LF1->LF1IAMRole->B2
+                Resource: !Sub arn:aws:s3:::photosbucket-${AWS::AccountId}-${AWS::Region}/*
               - Effect: Allow
                 Action: rekognition:DetectLabels
-                #Wild card is used instead of ARN, because Rekognition
-                #is an API based service, so there is no specific ARN
-                #that it needs access to.
+                # Wild card is used instead of ARN, because Rekognition
+                # is an API based service, so there is no specific ARN
+                # that it needs access to.
                 Resource: '*'
-  #              - Effect: Allow
-  #                Action:
-  #                  - es:ESHttpPost
-  #                  - es:ESHttpPut
-  #                  - es:ESHttpDelete
-  #                Resource: !Sub
-  #                  - "arn:aws:es:${AWS::Region}:${AWS::AccountId}:domain/${DomainName}/photos/*"
-  #                  #Pulls physical domain name assigned when open search instance is created
-  #                  - DomainName: !GetAtt PhotosDomain.DomainName
+  #            - Effect: Allow
+  #              Action:
+  #                - es:ESHttpPost
+  #                - es:ESHttpPut
+  #                - es:ESHttpDelete
+  #              Resource: !Sub
+  #                - "arn:aws:es:${AWS::Region}:${AWS::AccountId}:domain/${DomainName}/photos/*"
+  #                # Pulls physical domain name assigned when open search instance is created
+  #                - DomainName: !GetAtt PhotosDomain.DomainName
+
   LF2IAMRole:
     Type: AWS::IAM::Role
     Properties:
@@ -116,6 +117,27 @@ Resources:
                   - es:ESHttpPost
                 Resource: "*"
 
+  ApiGatewayS3Role:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: apigateway.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: ApiGatewayS3WritePhotos
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:PutObject
+                  - s3:PutObjectAcl
+                Resource: !Sub arn:aws:s3:::photosbucket-${AWS::AccountId}-${AWS::Region}/*
+
   BotRuntimeRole:
     Type: AWS::IAM::Role
     Properties:
@@ -139,9 +161,10 @@ Resources:
                   - polly:SynthesizeSpeech
                   - comprehend:DetectSentiment
                 Resource: '*'
-    # 2. Inline bot definition which depends on the IAM role
-    # The bot definition consists of combining all the child resources into one CFN resource.
-    # This includes Locales, Intents, Slots, and SlotTypes.
+  # 2. Inline bot definition which depends on the IAM role
+  # The bot definition consists of combining all the child resources into one CFN resource.
+  # This includes Locales, Intents, Slots, and SlotTypes.
+
   PhotoSearchBot:
     DependsOn: BotRuntimeRole
     Type: AWS::Lex::Bot
@@ -153,7 +176,7 @@ Resources:
       IdleSessionTTLInSeconds: 300
       Description: Takes user input to get keywords to search with
       # Provide a setting that allows you to either auto build the locales provided.
-      # Locale builds are also kicked off if you attempt to create a bot version 
+      # Locale builds are also kicked off if you attempt to create a bot version
       # that depends on an unbuilt locale.
       AutoBuildBotLocales: false
       BotLocales:
@@ -205,7 +228,7 @@ Resources:
               Slots:
                 - Name: PhotoType
                   Description: something
-                  SlotTypeName: String
+                  SlotTypeName: PhotoTypeValues
                   ValueElicitationSetting:
                     SlotConstraint: Required
                     PromptSpecification:
@@ -220,6 +243,7 @@ Resources:
             - Name: FallbackIntent
               Description: Default intent when no other intent matches
               ParentIntentSignature: AMAZON.FallbackIntent
+
   PhotoSearchBotVersionWithCFN:
     DependsOn: PhotoSearchBot
     Type: AWS::Lex::BotVersion
@@ -244,13 +268,14 @@ Resources:
       #   - LocaleId: en_US
       #     BotAliasLocaleSetting:
       #       Enabled: false
-      #       CodeHookSpecification: 
+      #       CodeHookSpecification:
       #         LambdaCodeHook:
       #           CodeHookInterfaceVersion: "1.0"
       #           LambdaArn: "arn:aws:lambda:us-east-1:111111111111:function:ReplaceWithYourOwnLambda"
       BotVersion: !GetAtt PhotoSearchBotVersionWithCFN.BotVersion
       SentimentAnalysisSettings:
         DetectSentiment: true
+
   LF2:
     DependsOn: PhotoSearchBot
     Type: AWS::Lambda::Function
@@ -258,13 +283,14 @@ Resources:
       Role: !GetAtt LF2IAMRole.Arn
       Runtime: python3.12
       FunctionName: search-photos
-      #Source code for lambda function
+      # Source code for lambda function
       Code:
         ZipFile: |
           def main(event, context):
             return "Hello World!"
       Handler: index.main
       Timeout: 15
+
   PhotoGateway:
     Type: AWS::ApiGateway::RestApi
     Properties:
@@ -286,7 +312,7 @@ Resources:
       ParentId: !GetAtt PhotoGateway.RootResourceId
       PathPart: search
 
-  # PUT /photos  (S3 proxy – you’ll need to adjust the Uri)
+  # PUT /photos (S3 proxy)
   PutPhotosMethod:
     Type: AWS::ApiGateway::Method
     DependsOn:
@@ -303,6 +329,7 @@ Resources:
         Type: AWS
         IntegrationHttpMethod: PUT
         Uri: !Sub arn:aws:apigateway:${AWS::Region}:s3:path/${B2}/{object}
+        Credentials: !GetAtt ApiGatewayS3Role.Arn
         RequestParameters:
           integration.request.header.x-amz-meta-customLabels: method.request.header.x-amz-meta-customLabels
         PassthroughBehavior: WHEN_NO_MATCH
