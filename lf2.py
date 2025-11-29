@@ -58,7 +58,7 @@ def get_keywords_from_lex(text: str, session_id: str) -> list[str]:
     keywords = []
 
     # Collect all slot interpretedValues as keywords
-    for slot_name, slot in slots.items():
+    for slot in slots.items():
         if not slot:
             continue
         value = slot.get("value", {})
@@ -75,7 +75,7 @@ def get_keywords_from_lex(text: str, session_id: str) -> list[str]:
 
 def search_opensearch(keywords: list[str]) -> list[dict]:
     """
-    Query OpenSearch for given keyword list, return list of photo docs.
+    Query OpenSearch for given keyword list, return list of photo docs. Change
     """
     if not keywords:
         return []
