@@ -143,7 +143,10 @@ def lambda_handler(event, context):
         # Return results to API Gateway caller
         return {
             "statusCode": 200,
-            "headers": {"Content-Type": "application/json"},
+            "headers": {"Content-Type": "application/json","Access-Control-Allow-Origin": "*",         # or your S3 website origin
+        "Access-Control-Allow-Headers": "Content-Type,x-api-key",
+        "Access-Control-Allow-Methods": "GET,OPTIONS"
+        },
             "body": json.dumps({
                 "query": q,
                 "keywords": keywords,
