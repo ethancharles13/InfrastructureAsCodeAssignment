@@ -1,0 +1,66 @@
+CREATE TABLE Coder
+(
+    user_name VARCHAR(50) PRIMARY KEY,
+    personal_name VARCHAR(50) NOT NULL,
+    passwd VARCHAR(50) NOT NULL,
+    email VARCHAR(100) NOT NULL UNIQUE,
+    u_time_stamp TIMESTAMP DEFAULT CURRENT TIMESTAMP
+);
+CREATE TABLE Question
+(
+    qid SERIAL PRIMARY KEY,
+    q_name VARCHAR(100) NOT NULL,
+    difficulty varchar(16) NOT NULL
+    CHECK (difficulty IN ("Easy", "Medium", "Hard")
+    q_time_stamp TIMESTAMP DEFAULT CURRENT TIMESTAMP
+);
+CREATE TABLE Submission
+(
+    s_time_stamp at TIMESTAMP DEFAULT CURRENT TIMESTAMP
+    user_name VARCHAR(50) REFERENCES Coder(user_name)
+    ON DELETE CASCADE,
+    qid INTEGER REFERENCES Question(qid) ON DELETE CASCADE,
+    PRIMARY KEY(user_name, qid, s_time_stamp)
+);
+CREATE TABLE Test_Case
+(
+    tid SERIAL PRIMARY KEY,
+    qid INTEGER NOT NULL REFERENCES Question(qid),
+    input VARCHAR(1048576) NOT NULL,
+    output VARCHAR(1048576) NOT NULL,
+    tc_time_stamp at TIMESTAMP DEFAULT CURRENT TIMESTAMP,
+)
+CREATE TABLE TC_Result
+(
+    sid INTEGER REFERENCES Submission(sid),
+    tid INTEGER REFERENCES Test_Case(tid),
+    PRIMARY KEY(sid, tid),
+    passed BOOLEAN NOT NULL
+)
+CREATE TABLE Topic
+(
+    t_name VARCHAR(28) PRIMARY KEY,
+    qid INTEGER NOT NULL REFERENCES Question(qid) on DELETE CASCADE,
+    t_time_stamp TIMESTAMP DEFAULT CURRENT TIMESTAMP
+);
+--We can use parentcid to allow users to reply to comments with
+--a similar structure as reddit.
+--Another option is a reply table that represents replies to comments.
+--This option would result in only one thread of replies per comment,
+--similar to Youtube's implementation.
+CREATE TABLE Comment
+(
+    cid SERIAL PRIMARY KEY,
+    parentcid INTEGER NOT NULL,
+    qid INTEGER NOT NULL REFERENCES Question(qid) on DELETE CASCADE,
+    user_name VARCHAR(50) NOT NULL REFERENCES Coder(user_name)
+    text VARCHAR(128) NOT NULL,
+    c_time_stamp TIMESTAMP DEFAULT CURRENT TIMESTAMP
+);
+CREATE TABLE Likes
+ (
+    lid SERIAL PRIMARY KEY,
+    user_name VARCHAR(50) NOT NULL REFERENCES ”User”(uname) ON DELETE CASCADE,
+    cid INTEGER NOT NULL REFERENCES Comment(cid) ON DELETE CASCADE,
+    l_time_stamp at TIMESTAMP DEFAULT CURRENT TIMESTAMP,
+);
