@@ -295,12 +295,6 @@ Resources:
       BotVersion: !GetAtt PhotoSearchBotVersionWithCFN.BotVersion
       SentimentAnalysisSettings:
         DetectSentiment: true
-  Outputs:
-    LexBotId:
-      Value: !Ref PhotoSearchBot
-    
-    LexBotAliasId:
-      Value: !Ref FirstBotAliasWithCFN
 
   LF2:
     DependsOn: PhotoSearchBot
