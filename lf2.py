@@ -11,13 +11,13 @@ from requests_aws4auth import AWS4Auth
 REGION = "us-east-1"
 SERVICE = "es"
 
-OS_HOST = "search-photos-5fs2fd32xismuc3coqoqwkbi3q.us-east-1.es.amazonaws.com"
+OS_HOST = {os.environ['OS_ENDPOINT']}
 OS_INDEX = "photos"
 OS_URL = f"https://{OS_HOST}/{OS_INDEX}/_search"
 
 # Lex V2 config
-LEX_BOT_ID = os.environ.get("LEX_BOT_ID", "<your-bot-id>")
-LEX_BOT_ALIAS_ID = os.environ.get("LEX_BOT_ALIAS_ID", "<your-bot-alias-id>")
+LEX_BOT_ID = os.environ.get("LEX_BOT_ID", "errorID")
+LEX_BOT_ALIAS_ID = os.environ.get("LEX_BOT_ALIAS_ID", "errorAlias")
 LEX_LOCALE_ID = "en_US"
 
 # --- AWS clients and auth setup ---
