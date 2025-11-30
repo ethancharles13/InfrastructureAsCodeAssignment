@@ -3,7 +3,6 @@ version: 0.2
 phases:
   build:
     commands:
-      zip lf2.zip lf2.py
 artifacts:
   files:
     -  lf2.zip
