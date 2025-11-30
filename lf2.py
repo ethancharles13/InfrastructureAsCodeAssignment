@@ -1,86 +1,89 @@
 import json
 import os
-import uuid
+import logging
 
-import boto3
-import requests
-from requests_aws4auth import AWS4Auth
+import botocore.session
+from botocore.auth import SigV4Auth
+from botocore.awsrequest import AWSRequest
+import urllib.request
+import urllib.error
 
-# --- Config ---
+logger = logging.getLogger()
+logger.setLevel(logging.INFO)
 
-REGION = "us-east-1"
-SERVICE = "es"
+REGION = os.environ.get("AWS_REGION", "us-east-1")
+SERVICE = "es"  # OpenSearch/ES service name for SigV4
 
-OS_HOST = {os.environ['OS_ENDPOINT']}
-OS_INDEX = "photos"
-OS_URL = f"https://{OS_HOST}/{OS_INDEX}/_search"
-
-# Lex V2 config
-LEX_BOT_ID = os.environ.get("LEX_BOT_ID", "errorID")
-LEX_BOT_ALIAS_ID = os.environ.get("LEX_BOT_ALIAS_ID", "errorAlias")
-LEX_LOCALE_ID = "en_US"
-
-# --- AWS clients and auth setup ---
-
-session = boto3.Session()
-credentials = session.get_credentials().get_frozen_credentials()
-
-awsauth = AWS4Auth(
-    credentials.access_key,
-    credentials.secret_key,
-    REGION,
-    SERVICE,
-    session_token=credentials.token
-)
-
-lex_runtime = boto3.client("lexv2-runtime", region_name=REGION)
+# From CloudFormation:
+#   OS_ENDPOINT: !GetAtt PhotosDomain.DomainEndpoint  (no protocol, just host)
+#   OS_INDEX: "photos"
+OS_ENDPOINT = os.environ["OS_ENDPOINT"]          # e.g. "search-photos-xxxx.us-east-1.es.amazonaws.com"
+OS_INDEX = os.environ.get("OS_INDEX", "photos")
 
 
-# --- Helpers ---
+# --- Low-level signed HTTP client to OpenSearch --- #
 
-def get_keywords_from_lex(text: str, session_id: str) -> list[str]:
+_session = botocore.session.get_session()
+_credentials = _session.get_credentials()
+
+
+def signed_opensearch_request(path: str, method: str = "GET", body: dict | None = None) -> tuple[int, str]:
     """
-    Send text to Lex, return list of keyword strings extracted from intent slots.
+    Send a signed HTTP request to the OpenSearch domain using SigV4 + urllib.
+    Returns (status_code, body_text), even for non-2xx responses.
     """
-    response = lex_runtime.recognize_text(
-        botId=LEX_BOT_ID,
-        botAliasId=LEX_BOT_ALIAS_ID,
-        localeId=LEX_LOCALE_ID,
-        sessionId=session_id,
-        text=text,
+    host = OS_ENDPOINT.replace("https://", "").replace("http://", "").rstrip("/")
+    base_url = f"https://{host}"
+    url = base_url + path
+
+    if body is None:
+        body_bytes = b""
+    else:
+        body_str = json.dumps(body)
+        body_bytes = body_str.encode("utf-8")
+
+    headers = {
+        "Host": host,
+        "Content-Type": "application/json",
+    }
+
+    aws_request = AWSRequest(method=method, url=url, data=body_bytes, headers=headers)
+    SigV4Auth(_credentials, SERVICE, REGION).add_auth(aws_request)
+    prepared = aws_request.prepare()
+
+    req = urllib.request.Request(
+        url=prepared.url,
+        data=body_bytes if method in ("POST", "PUT") else None,
+        headers=dict(prepared.headers),
+        method=method,
     )
 
-    # Lex v2 response structure
-    session_state = response.get("sessionState", {}) or {}
-    intent = session_state.get("intent", {}) or {}
-    slots = intent.get("slots", {}) or {}
+    try:
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            resp_body = resp.read().decode("utf-8")
+            status = resp.getcode()
+    except urllib.error.HTTPError as e:
+        # Non-2xx status: capture status and body instead of raising
+        status = e.code
+        resp_body = e.read().decode("utf-8", errors="ignore")
+        logger.error("OpenSearch HTTPError %s for %s: %s", status, url, resp_body)
+    except Exception as e:
+        logger.exception("Error calling OpenSearch at %s", url)
+        # Re-raise so lambda_handler turns this into a 500
+        raise
 
-    keywords = []
-
-    # Collect all slot interpretedValues as keywords
-    for slot in slots.items():
-        if not slot:
-            continue
-        value = slot.get("value", {})
-        interpreted = value.get("interpretedValue")
-        if interpreted:
-            keywords.append(interpreted)
-
-    # Fallback: if Lex didn’t give us slots, use simple tokenization
-    if not keywords:
-        keywords = text.lower().split()
-
-    return keywords
+    return status, resp_body
 
 
-def search_opensearch(keywords: list[str]) -> list[dict]:
+def search_photos(keywords: list[str]) -> list[dict]:
     """
-    Query OpenSearch for given keyword list, return list of photo docs. Change
+    Run a terms query on labels.keyword with the given keywords.
+    Returns a list of photo dicts: {objectKey, bucket, labels, createdTimestamp}.
     """
     if not keywords:
         return []
 
-    os_query = {
+    query = {
         "size": 100,
         "query": {
             "bool": {
@@ -92,74 +95,98 @@ def search_opensearch(keywords: list[str]) -> list[dict]:
         }
     }
 
-    resp = requests.post(OS_URL, auth=awsauth, json=os_query)
-    resp.raise_for_status()
-    body = resp.json()
+    path = f"/{OS_INDEX}/_search"
+    status, body_text = signed_opensearch_request(path, method="POST", body=query)
 
-    hits = body.get("hits", {}).get("hits", [])
+    if status != 200:
+        logger.error("OpenSearch returned non-200: %s, body=%s", status, body_text)
+        raise RuntimeError(f"OpenSearch search failed with status {status}")
+    if status == 404:
+        logger.warning("OpenSearch index '%s' not found when searching, returning empty results", OS_INDEX)
+        return []
 
-    results = [
-        {
-            "objectKey": h["_source"].get("objectKey"),
-            "bucket": h["_source"].get("bucket"),
-            "labels": h["_source"].get("labels"),
-            "createdTimestamp": h["_source"].get("createdTimestamp"),
-        }
-        for h in hits
-    ]
+    payload = json.loads(body_text or "{}")
+    hits = payload.get("hits", {}).get("hits", [])
+
+    results = []
+    for h in hits:
+        src = h.get("_source", {})
+        results.append(
+            {
+                "objectKey": src.get("objectKey"),
+                "bucket": src.get("bucket"),
+                "labels": src.get("labels", []),
+                "createdTimestamp": src.get("createdTimestamp"),
+            }
+        )
     return results
 
 
-# --- Lambda entrypoint ---
-
-def lambda_handler(event, context):
+def _parse_keywords_from_event(event: dict) -> list[str]:
     """
-    LF2:
-    - Reads query param q from API Gateway
-    - Sends q to Lex for NLU
-    - Uses Lex slots as keywords to search OpenSearch
-    - Returns JSON array of photos
+    Read ?q=... from API Gateway proxy event and split into simple keywords.
     """
+    q_params = event.get("queryStringParameters") or {}
+    raw = (q_params.get("q") or "").strip()
+    if not raw:
+        return []
 
-    query_params = event.get("queryStringParameters") or {}
-    q = query_params.get("q") or query_params.get("query") or ""
+    # Split on commas and whitespace; strip empties
+    tokens: list[str] = []
+    for part in raw.split(","):
+        for tok in part.strip().split():
+            if tok:
+                tokens.append(tok)
+    return tokens
 
-    if not q:
+
+def main(event, context):
+    """
+    Lambda proxy integration handler for GET /search?q=...
+    """
+    logger.info("Event: %s", json.dumps(event))
+
+    keywords = _parse_keywords_from_event(event)
+    if not keywords:
+        body = {"results": []}
         return {
-            "statusCode": 400,
-            "headers": {"Content-Type": "application/json"},
-            "body": json.dumps({"error": "Missing query parameter 'q'"})
+            "statusCode": 200,
+            "headers": {
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Methods": "GET,OPTIONS",
+                "Access-Control-Allow-Headers": "Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token",
+                "Content-Type": "application/json",
+            },
+            "body": json.dumps(body),
         }
 
     try:
-        session_id = str(uuid.uuid4())
-
-        keywords = get_keywords_from_lex(q, session_id)
-        
-        keywords = [k.title() for k in keywords]
-
-        results = search_opensearch(keywords)
-
-        # Return results to API Gateway caller
+        results = search_photos(keywords)
+        body = {"results": results}
         return {
             "statusCode": 200,
-            "headers": {"Content-Type": "application/json","Access-Control-Allow-Origin": "*",         # or your S3 website origin
-        "Access-Control-Allow-Headers": "Content-Type,x-api-key",
-        "Access-Control-Allow-Methods": "GET,OPTIONS"
-        },
-            "body": json.dumps({
-                "query": q,
-                "keywords": keywords,
-                "results": results
-            })
+            "headers": {
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Methods": "GET,OPTIONS",
+                "Access-Control-Allow-Headers": "Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token",
+                "Content-Type": "application/json",
+            },
+            "body": json.dumps(body),
         }
-
     except Exception as e:
-        # Log in CloudWatch if you like
-        print(f"Error: {e}")
-
+        logger.exception("Search failed")
         return {
             "statusCode": 500,
-            "headers": {"Content-Type": "application/json"},
-            "body": json.dumps({"error": str(e)})
+            "headers": {
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Methods": "GET,OPTIONS",
+                "Access-Control-Allow-Headers": "Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token",
+                "Content-Type": "application/json",
+            },
+            "body": json.dumps(
+                {
+                    "message": "Search failed",
+                    "error": str(e),
+                }
+            ),
         }
