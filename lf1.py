@@ -61,7 +61,12 @@ def main(event, context):
     s3Client = boto3.client("s3")
     s3Response = s3Client.head_object(Bucket=bucket, Key=photo)
     photoMetadata = s3Response.get("Metadata", {})
-    A1 = json.loads(photoMetadata.get("customlabels", "[]"))
+    raw_custom = photoMetadata.get("customlabels")  # will be like "Sam, Sally" or None
+
+    if raw_custom:
+        A1 = [x.strip() for x in raw_custom.split(",") if x.strip()]
+    else:
+        A1 = []
     # log metadata
     logger.info("Photo metadata labels")
     logger.info(A1)
