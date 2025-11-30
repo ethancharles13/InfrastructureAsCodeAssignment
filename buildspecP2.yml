@@ -1,0 +1,18 @@
+version: 0.2
+
+phases:
+  install:
+    commands:
+      - echo "Installing build dependencies..."
+  build:
+    commands:
+      - echo "Starting build..."
+      # Create output directory
+      - mkdir -p output
+      # Copy website content into output
+      - cp index.html output/
+      - cp -r sdk output/
+artifacts:
+  files:
+    - '**/*'
+  base-directory: output
