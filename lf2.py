@@ -88,7 +88,7 @@ def search_photos(keywords: list[str]) -> list[dict]:
         "query": {
             "bool": {
                 "should": [
-                    {"terms": {"labels.keyword": keywords}}
+                    {"terms": {"labels": keywords}}
                 ],
                 "minimum_should_match": 1
             }
