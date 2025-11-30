@@ -5,4 +5,4 @@ phases:
     commands:
 artifacts:
   files:
-    -  lf2.zip
+    -  lf2.py
