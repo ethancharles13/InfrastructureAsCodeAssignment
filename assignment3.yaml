@@ -66,8 +66,8 @@ Resources:
         ZipFile: |
           def main(event, context):
             return "Hello World!"
-      Handler: lf1.main
-      Timeout: 30
+      Handler: index.main
+      Timeout: 15
 
   LF1IAMRole:
     Type: AWS::IAM::Role
@@ -98,8 +98,8 @@ Resources:
                 #Hardcoding the arn for B2 is considered bad practice. It is done
                 #here to break the dependency loop B2->LF1->LF1IAMRole->B2
                 Resource:
-                  - "arn:aws:s3:::${B2}"
-                  - "arn:aws:s3:::${B2}/*"
+                  - !Sub "arn:aws:s3:::${B2}"
+                  - !Sub "arn:aws:s3:::${B2}/*"
               - Effect: Allow
                 Action: rekognition:DetectLabels
                 #Wild card is used instead of ARN, because Rekognition
@@ -309,14 +309,12 @@ Resources:
           LEX_BOT_ID: !Ref PhotoSearchBot
           LEX_ALIAS_ID: !Ref FirstBotAliasWithCFN
           LEX_LOCALE_ID: "en_US"
-          OS_ENDPOINT: !GetAtt PhotosDomain.DomainEndpoint
-          OS_INDEX: "photos"
       Code:
         ZipFile: |
           def main(event, context):
             return "Hello World!"
-      Handler: lf2.main
-      Timeout: 30
+      Handler: index.main
+      Timeout: 15
 
   PhotoGateway:
     Type: AWS::ApiGateway::RestApi
