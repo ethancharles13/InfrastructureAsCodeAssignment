@@ -1,19 +1,9 @@
 version: 0.2
 
 phases:
-  install:
-    runtime-versions:
-      python: 3.14
-    commands:
-      - python -m pip install --upgrade pip
-      - mkdir -p package
-      - pip install --target package opensearch-py requests-aws4auth
   build:
     commands:
-      - cp lf1.py package/
-      - cd package
-      - zip -r ../lf1.zip lf1.py opensearchpy requests_aws4auth
-      - cd ..
+      zip lf1.zip lf1.py
 artifacts:
   files:
     -  lf1.zip
