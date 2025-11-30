@@ -2,9 +2,11 @@ version: 0.2
 
 phases:
   install:
-    runtime-version:
+    runtime-versions:
       python: 3.14
-    command:
+    commands:
+      - python -m pip install --upgrade pip
+      - mkdir -p package
       - pip install --target package opensearch-py requests-aws4auth
   build:
     commands:

@@ -122,7 +122,7 @@ def search_photos(keywords: list[str]) -> list[dict]:
     return results
 
 
-def _parse_keywords_from_event(event: dict) -> list[str]:
+def main(event, context):
     """
     Read ?q=... from API Gateway proxy event and split into simple keywords.
     """
