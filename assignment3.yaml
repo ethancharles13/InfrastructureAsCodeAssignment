@@ -393,13 +393,13 @@ Resources:
       - B2
     Properties:
       RestApiId: !Ref PhotoGateway
-      ResourceId: !Ref PhotosObjectResource
+      ResourceId: !Ref PhotosResource
       HttpMethod: PUT
       AuthorizationType: NONE
-      ApiKeyRequired: true
+      ApiKeyRequired: false
       RequestParameters:
-        method.request.path.object: true
         method.request.header.x-amz-meta-customLabels: false
+        method.request.path.object: true            # if using /photos/{object}
       Integration:
         Type: AWS
         IntegrationHttpMethod: PUT
@@ -407,7 +407,74 @@ Resources:
         Credentials: !GetAtt ApiGatewayS3Role.Arn
         RequestParameters:
           integration.request.header.x-amz-meta-customLabels: method.request.header.x-amz-meta-customLabels
+          integration.request.path.object: method.request.path.object
         PassthroughBehavior: WHEN_NO_MATCH
+        IntegrationResponses:
+          - StatusCode: 200
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+              method.response.header.Access-Control-Allow-Methods: "'OPTIONS,PUT'"
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token,x-amz-meta-customLabels'"
+            ResponseTemplates:
+              application/json: ""
+      MethodResponses:
+        - StatusCode: 200
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: true
+            method.response.header.Access-Control-Allow-Methods: true
+            method.response.header.Access-Control-Allow-Headers: true
+  
+  PhotosOptionsMethod:
+      Type: AWS::ApiGateway::Method
+      Properties:
+        RestApiId: !Ref PhotoGateway
+        ResourceId: !Ref PhotosResource
+        HttpMethod: OPTIONS
+        AuthorizationType: NONE
+        Integration:
+          Type: MOCK
+          RequestTemplates:
+            application/json: '{"statusCode": 200}'
+          IntegrationResponses:
+            - StatusCode: 200
+              ResponseParameters:
+                method.response.header.Access-Control-Allow-Origin: "'*'"
+                method.response.header.Access-Control-Allow-Methods: "'OPTIONS,PUT'"
+                method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token,x-amz-meta-customLabels'"
+              ResponseTemplates:
+                application/json: ""
+        MethodResponses:
+          - StatusCode: 200
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Origin: true
+              method.response.header.Access-Control-Allow-Methods: true
+              method.response.header.Access-Control-Allow-Headers: true
+
+  SearchOptionsMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref PhotoGateway
+      ResourceId: !Ref SearchResource
+      HttpMethod: OPTIONS
+      AuthorizationType: NONE
+      Integration:
+        Type: MOCK
+        RequestTemplates:
+          application/json: '{"statusCode": 200}'
+        IntegrationResponses:
+          - StatusCode: 200
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+              method.response.header.Access-Control-Allow-Methods: "'GET,OPTIONS'"
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+            ResponseTemplates:
+              application/json: ""
+      MethodResponses:
+        - StatusCode: 200
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: true
+            method.response.header.Access-Control-Allow-Methods: true
+            method.response.header.Access-Control-Allow-Headers: true
 
   # GET /search?q=...
   GetSearchMethod:
@@ -419,7 +486,7 @@ Resources:
       ResourceId: !Ref SearchResource
       HttpMethod: GET
       AuthorizationType: NONE
-      ApiKeyRequired: true
+      ApiKeyRequired: false
       RequestParameters:
         method.request.querystring.q: false
       Integration:
@@ -441,10 +508,13 @@ Resources:
     Type: AWS::ApiGateway::Deployment
     DependsOn:
       - PutPhotosMethod
+      - PhotosOptionsMethod
       - GetSearchMethod
+      - SearchOptionsMethod
     Properties:
       RestApiId: !Ref PhotoGateway
       StageName: Stage1
+
 
 Outputs:
   WebsiteURL:
