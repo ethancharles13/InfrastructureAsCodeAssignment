@@ -53,6 +53,19 @@ Resources:
               - - 'arn:aws:s3:::'
                 - !Ref B1
                 - /*
+          #Enables P2 to write front end to the bucket
+          - Sid: CodePipelineWriteAccess
+            Effect: Allow
+            Principal:
+              AWS: "arn:aws:iam::346225466066:role/service-role/AWSCodePipelineServiceRole-us-east-1-P2"
+            Action:
+              - s3:PutObject
+              - s3:PutObjectAcl
+              - s3:GetObject
+              - s3:ListBucket
+            Resource:
+              - !Join [ "", [ "arn:aws:s3:::", !Ref B1 ] ]
+              - !Join [ "", [ "arn:aws:s3:::", !Ref B1, "/*" ] ]
 
   B2:
     Type: AWS::S3::Bucket
