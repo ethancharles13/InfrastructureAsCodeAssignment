@@ -1,7 +1,8 @@
 Startup tasks:
     1: Create stack in cloud formation using assignment3.yaml
     2: Create photo index within OpenSearch domain photos
-    3: Add OpenSearch layer to lf1 and lf2 if needed.
+    3: Add OpenSearch layer to lf1
     4: Update lf1 and lf2 with OpenSearch domain photos url if needed.
     5: After the stack is created, look at P1->Edit->Deploy, verify that DeployLF1 and DeployLF2 are pointing
     to the lambda function in the function-name section.
+    6: After step 5, edit the deploy stage of P2 to point to the front end bucket

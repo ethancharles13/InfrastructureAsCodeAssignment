@@ -2,7 +2,6 @@ AWSTemplateFormatVersion: 2010-09-09
 Description: Template for our assignment 3 implementation
 Resources:
 
-#Comment out OpenSearch resources until we are ready to use them
   PhotosDomain:
     Type: AWS::OpenSearchService::Domain
     Properties:
@@ -14,7 +13,7 @@ Resources:
       ClusterConfig:
         InstanceCount: 1
       AccessPolicies:
-        Version: "2012-10-17"
+        Version: '2012-10-17'
         Statement:
           - Effect: Allow
             Principal:
@@ -23,7 +22,37 @@ Resources:
               - es:ESHttpPost
               - es:ESHttpPut
               - es:ESHttpDelete
-            Resource: !Sub "arn:aws:es:${AWS::Region}:${AWS::AccountId}:domain/photos/*"
+            Resource: !Sub arn:aws:es:${AWS::Region}:${AWS::AccountId}:domain/photos/*
+
+  B1:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub front-end-bucket-${AWS::AccountId}-${AWS::Region}
+      WebsiteConfiguration:
+        IndexDocument: index.html
+      # Enable public access
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: false
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: false
+
+  # Grants public read access
+  B1Policy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref B1
+      PolicyDocument:
+        Statement:
+          - Sid: PublicReadGetObject
+            Effect: Allow
+            Principal: '*'
+            Action: s3:GetObject
+            Resource: !Join
+              - ''
+              - - 'arn:aws:s3:::'
+                - !Ref B1
+                - /*
 
   B2:
     Type: AWS::S3::Bucket
@@ -32,7 +61,7 @@ Resources:
     #lambda configurations.
     DependsOn: B2Permission
     Properties:
-      BucketName: !Sub "photosbucket-${AWS::AccountId}-${AWS::Region}"
+      BucketName: !Sub photosbucket-${AWS::AccountId}-${AWS::Region}
       NotificationConfiguration:
         #Allows S3 to use put method on LF1
         LambdaConfigurations:
@@ -51,7 +80,7 @@ Resources:
       Action: lambda:InvokeFunction
       FunctionName: !Ref LF1
       Principal: s3.amazonaws.com
-      SourceArn: !Sub "arn:aws:s3:::photosbucket-${AWS::AccountId}-${AWS::Region}"
+      SourceArn: !Sub arn:aws:s3:::photosbucket-${AWS::AccountId}-${AWS::Region}
 
   LF1:
     Type: AWS::Lambda::Function
@@ -74,7 +103,7 @@ Resources:
     Properties:
       #Allows a lambda instance to assume this role
       AssumeRolePolicyDocument:
-        Version: "2012-10-17"
+        Version: '2012-10-17'
         Statement:
           - Effect: Allow
             Principal:
@@ -87,7 +116,7 @@ Resources:
       Policies:
         - PolicyName: LF1Permissions
           PolicyDocument:
-            Version: "2012-10-17"
+            Version: '2012-10-17'
             Statement:
               - Effect: Allow
                 Action:
@@ -98,20 +127,20 @@ Resources:
                 #Hardcoding the arn for B2 is considered bad practice. It is done
                 #here to break the dependency loop B2->LF1->LF1IAMRole->B2
                 Resource:
-                  - !Sub "arn:aws:s3:::${B2}"
-                  - !Sub "arn:aws:s3:::${B2}/*"
+                  - !Sub arn:aws:s3:::photosbucket-${AWS::AccountId}-${AWS::Region}
+                  - !Sub arn:aws:s3:::photosbucket-${AWS::AccountId}-${AWS::Region}/*
               - Effect: Allow
                 Action: rekognition:DetectLabels
                 #Wild card is used instead of ARN, because Rekognition
                 #is an API based service, so there is no specific ARN
                 #that it needs access to.
-                Resource: "*"
+                Resource: '*'
               - Effect: Allow
                 Action:
                   - es:ESHttpPost
                   - es:ESHttpPut
                   - es:ESHttpDelete
-                Resource: !Sub "arn:aws:es:${AWS::Region}:${AWS::AccountId}:domain/photos/*"
+                Resource: !Sub arn:aws:es:${AWS::Region}:${AWS::AccountId}:domain/photos/*
 
   LF2IAMRole:
     Type: AWS::IAM::Role
@@ -135,7 +164,7 @@ Resources:
                 Action:
                   - es:ESHttpGet
                   - es:ESHttpPost
-                Resource: "*"
+                Resource: '*'
 
   ApiGatewayS3Role:
     Type: AWS::IAM::Role
@@ -308,7 +337,7 @@ Resources:
         Variables:
           LEX_BOT_ID: !Ref PhotoSearchBot
           LEX_ALIAS_ID: !Ref FirstBotAliasWithCFN
-          LEX_LOCALE_ID: "en_US"
+          LEX_LOCALE_ID: en_US
       Code:
         ZipFile: |
           def main(event, context):
@@ -334,7 +363,7 @@ Resources:
     Properties:
       RestApiId: !Ref PhotoGateway
       ParentId: !Ref PhotosResource
-      PathPart: "{object}"
+      PathPart: '{object}'
 
   # /search resource
   SearchResource:
@@ -403,3 +432,12 @@ Resources:
     Properties:
       RestApiId: !Ref PhotoGateway
       StageName: Stage1
+
+Outputs:
+  WebsiteURL:
+    Description: The URL of the front end.
+    Value: !GetAtt B1.WebsiteURL
+
+  S3BucketName:
+    Description: The name of the front end bucket.
+    Value: !Ref B1
