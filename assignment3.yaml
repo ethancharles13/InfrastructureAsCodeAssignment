@@ -60,7 +60,6 @@ Resources:
               AWS: "arn:aws:iam::346225466066:role/service-role/AWSCodePipelineServiceRole-us-east-1-P2"
             Action:
               - s3:PutObject
-              - s3:PutObjectAcl
               - s3:GetObject
               - s3:ListBucket
             Resource:

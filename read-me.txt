@@ -9,3 +9,4 @@ Startup tasks:
     7: In apigClient.js, update the line
     var invokeUrl = 'https://<api gateway id>.execute-api.us-east-1.amazonaws.com/Stage1';
     so that it contains the id of the new api gateway.
+    8: Update cors policies in API gateway
