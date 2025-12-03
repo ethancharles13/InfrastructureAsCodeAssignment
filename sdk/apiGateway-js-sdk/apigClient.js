@@ -44,17 +44,11 @@ apigClientFactory.newClient = function (config) {
     }
     //If defaultContentType is not defined then default to application/json
     if(config.defaultContentType === undefined) {
-        config.defaultContentType = 'application/json';
+        config.defaultContentType = 'application/octet-stream';
     }
-    //If defaultAcceptType is not defined then default to application/json
-    if(config.defaultAcceptType === undefined) {
-        config.defaultAcceptType = 'application/json';
-    }
-
     
     // extract endpoint and path from url
-    // update with correct api id after setting up stack
-    var invokeUrl = 'https://wy10bvyqqi.execute-api.us-east-1.amazonaws.com/Stage1';
+    var invokeUrl = 'https://98klk5rvd1.execute-api.us-east-1.amazonaws.com/Stage1';
     var endpoint = /(^https?:\/\/[^\/]+)/g.exec(invokeUrl)[1];
     var pathComponent = invokeUrl.substring(endpoint.length);
 
@@ -84,24 +78,6 @@ apigClientFactory.newClient = function (config) {
     
     
     
-    apigClient.photosOptions = function (params, body, additionalParams) {
-        if(additionalParams === undefined) { additionalParams = {}; }
-        
-        apiGateway.core.utils.assertParametersDefined(params, [], ['body']);
-        
-        var photosOptionsRequest = {
-            verb: 'options'.toUpperCase(),
-            path: pathComponent + uritemplate('/photos').expand(apiGateway.core.utils.parseParametersToObject(params, [])),
-            headers: apiGateway.core.utils.parseParametersToObject(params, []),
-            queryParams: apiGateway.core.utils.parseParametersToObject(params, []),
-            body: body
-        };
-        
-        
-        return apiGatewayClient.makeRequest(photosOptionsRequest, authType, additionalParams, config.apiKey);
-    };
-    
-    
     apigClient.photosObjectPut = function (params, body, additionalParams) {
         if(additionalParams === undefined) { additionalParams = {}; }
         
@@ -117,6 +93,24 @@ apigClientFactory.newClient = function (config) {
         
         
         return apiGatewayClient.makeRequest(photosObjectPutRequest, authType, additionalParams, config.apiKey);
+    };
+    
+    
+    apigClient.photosObjectOptions = function (params, body, additionalParams) {
+        if(additionalParams === undefined) { additionalParams = {}; }
+        
+        apiGateway.core.utils.assertParametersDefined(params, [], ['body']);
+        
+        var photosObjectOptionsRequest = {
+            verb: 'options'.toUpperCase(),
+            path: pathComponent + uritemplate('/photos/{object}').expand(apiGateway.core.utils.parseParametersToObject(params, [])),
+            headers: apiGateway.core.utils.parseParametersToObject(params, []),
+            queryParams: apiGateway.core.utils.parseParametersToObject(params, []),
+            body: body
+        };
+        
+        
+        return apiGatewayClient.makeRequest(photosObjectOptionsRequest, authType, additionalParams, config.apiKey);
     };
     
     

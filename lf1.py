@@ -38,82 +38,85 @@ except Exception as e:
 
 
 def main(event, context):
-    # Log event and context
     logger.info("## EVENT RECEIVED ##")
     logger.info(json.dumps(event))
-    logger.info("## CONTEXT INFO ##")
-    logger.info(f"Function Name: {context.function_name}")
-    logger.info(f"Remaining Time (ms): {context.get_remaining_time_in_millis()}")
-    logger.info(f"Request ID: {context.aws_request_id}")
 
-    if openSearchClient == None:
-        return
-        {
+    if openSearchClient is None:
+        logger.error("OpenSearch client is not initialized.")
+        return {
             "statusCode": 500,
             "body": "Failed to initialize OpenSearch client."
         }
-    # Pull info form event
-    records = event.get("Records", {})
-    bucket = records[0]["s3"]["bucket"]["name"]
-    photo = records[0]["s3"]["object"]["key"]
 
-    # Get metadata from photo
+    records = event.get("Records", [])
+    if not records:
+        logger.error("No Records in event")
+        return {
+            "statusCode": 400,
+            "body": "No Records in event."
+        }
+
+    from urllib.parse import unquote_plus
+    bucket = records[0]["s3"]["bucket"]["name"]
+    photo = unquote_plus(records[0]["s3"]["object"]["key"])
+
+    # Get metadata
     s3Client = boto3.client("s3")
     s3Response = s3Client.head_object(Bucket=bucket, Key=photo)
     photoMetadata = s3Response.get("Metadata", {})
-    raw_custom = photoMetadata.get("customlabels")  # will be like "Sam, Sally" or None
+    raw_custom = photoMetadata.get("customlabels")
 
     if raw_custom:
         A1 = [x.strip() for x in raw_custom.split(",") if x.strip()]
     else:
         A1 = []
-    # log metadata
-    logger.info("Photo metadata labels")
-    logger.info(A1)
 
-    # Get labels from Rekognition
+    logger.info("Photo metadata labels: %s", A1)
+
+    # Rekognition
     rekognitionClient = boto3.client("rekognition")
     rekResponse = rekognitionClient.detect_labels(
-        Image={
-            'S3Object': {
-                "Bucket": bucket,
-                "Name": photo
-            }
-        }
+        Image={"S3Object": {"Bucket": bucket, "Name": photo}}
     )
-    rekLabels = [label["Name"] for label in rekResponse.get("Labels", "[]")]
+    rekLabels = [label["Name"] for label in rekResponse.get("Labels", [])]
     A1.extend(rekLabels)
 
-    # log labels
     logger.info("Rekognition Labels:")
     logger.info(json.dumps(rekResponse, indent=4))
 
-    index = \
-        {
-            "objectKey": photo,
-            "bucket": bucket,
-            "createdTimestamp": s3Response.get("LastModified").isoformat(),
-            "labels": A1
+    index_doc = {
+        "objectKey": photo,
+        "bucket": bucket,
+        "createdTimestamp": s3Response.get("LastModified").isoformat(),
+        "labels": A1
+    }
+
+    logger.info("Indexing photo document:")
+    logger.info(json.dumps(index_doc, indent=4))
+
+    try:
+        osResponse = openSearchClient.index(
+            index="photos",
+            id=photo,
+            body=index_doc
+        )
+        logger.info("OpenSearch response: %s", json.dumps(osResponse, indent=4))
+    except Exception as e:
+        logger.error("Error indexing document into OpenSearch: %s", e, exc_info=True)
+        return {
+            "statusCode": 500,
+            "body": f"Exception while indexing photo: {str(e)}"
         }
-    logger.info("Indexing photo:")
-    logger.info(json.dumps(index, indent=4))
-    osResponse = openSearchClient.index(
-        index="photos", \
-        id=photo, \
-        body=index)
-    if osResponse["_shards"]["successful"] == 1:
-        logger.info("Succesfully indexed photo:")
-        logger.info(json.dumps(osResponse, indent=4))
-        return
-        {
+
+    if osResponse.get("_shards", {}).get("successful") == 1:
+        logger.info("Successfully indexed photo")
+        return {
             "statusCode": 200,
             "body": "Photo indexed successfully."
         }
     else:
-        logger.info("Failed to index photo:")
-        logger.info(json.dumps(osResponse, indent=4))
-        return
-        {
+        logger.error("Failed to index photo")
+        return {
             "statusCode": 500,
             "body": "Failed to index photo."
         }

@@ -120,53 +120,70 @@ searchForm.addEventListener('submit', function (e) {
     });
 });
 
-    // === UPLOAD ===
-    const uploadForm = document.getElementById('upload-form');
-    const fileInput = document.getElementById('photo-file');
-    const customLabelsInput = document.getElementById('custom-labels');
-    const uploadStatus = document.getElementById('upload-status');
+// === UPLOAD ===
+const uploadForm = document.getElementById('upload-form');
+const fileInput = document.getElementById('photo-file');
+const customLabelsInput = document.getElementById('custom-labels');
+const uploadStatus = document.getElementById('upload-status');
 
-    uploadForm.addEventListener('submit', function (e) {
-    e.preventDefault();
-    uploadStatus.textContent = '';
+const API_BASE = 'https://98klk5rvd1.execute-api.us-east-1.amazonaws.com/Stage1';
 
-    const file = fileInput.files[0];
-    if (!file) {
-        uploadStatus.textContent = 'Please choose a file.';
-        return;
-    }
+uploadForm.addEventListener('submit', async function (e) {
+  e.preventDefault();
+  uploadStatus.textContent = '';
 
-    const raw = customLabelsInput.value.trim();
-    let customLabelsHeader = '';
-    if (raw) {
-        const labels = raw
-        .split(',')
-        .map(l => l.trim())
-        .filter(l => l.length > 0);
-        customLabelsHeader = labels.join(', ');
-    }
+  const file = fileInput.files[0];
+  if (!file) {
+    uploadStatus.textContent = 'Please choose a file.';
+    return;
+  }
 
-    const params = {
-        object: file.name,
-        'x-amz-meta-customLabels': customLabelsHeader || ''  // required by SDK
-    };
+  console.log("Selected file:", file.name, "size:", file.size);
 
-    const body = file; // Blob
-    const additionalParams = {}; // extra headers if needed
+  const raw = customLabelsInput.value.trim();
+  let customLabelsHeader = '';
+  if (raw) {
+    const labels = raw
+      .split(',')
+      .map(l => l.trim())
+      .filter(l => l.length > 0);
+    customLabelsHeader = labels.join(', ');
+  }
 
-    uploadStatus.textContent = 'Uploading...';
+  const objectKey = file.name;
+  const url = `${API_BASE}/photos/${encodeURIComponent(objectKey)}`;
 
-    apigClient.photosObjectPut(params, body, additionalParams)
-        .then(function (resp) {
-        uploadStatus.textContent = 'Upload successful!';
-        fileInput.value = '';
-        customLabelsInput.value = '';
-        })
-        .catch(function (err) {
-        console.error(err);
-        uploadStatus.textContent = 'Error uploading photo. Check console.';
-        });
+  const headers = {
+    'Content-Type': file.type || 'application/octet-stream',
+    'x-amz-meta-customlabels': customLabelsHeader || ''
+  };
+
+  uploadStatus.textContent = 'Uploading...';
+
+  try {
+    const resp = await fetch(url, {
+      method: 'PUT',
+      headers,
+      body: file   // ⬅️ this is what actually sends the bytes
     });
+
+    console.log('Upload response status:', resp.status);
+    if (!resp.ok) {
+      const text = await resp.text().catch(() => '');
+      console.error('Upload failed:', resp.status, text);
+      uploadStatus.textContent = `Upload failed (${resp.status}). Check console.`;
+      return;
+    }
+
+    uploadStatus.textContent = 'Upload successful!';
+    fileInput.value = '';
+    customLabelsInput.value = '';
+  } catch (err) {
+    console.error('Upload error:', err);
+    uploadStatus.textContent = 'Error uploading photo. Check console.';
+  }
+});
+
   </script>
 </body>
 </html>
